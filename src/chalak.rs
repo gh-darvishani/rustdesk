@@ -52,11 +52,11 @@ pub async fn set_phone_id(id: String) -> &'static str {
     }
     for _ in 0..40 {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        let cur = crate::ipc::get_config("id").await.ok().flatten().unwrap_or_default();
+        let cur = crate::ipc::get_config_async("id", 1_000).await.ok().flatten().unwrap_or_default();
         if !cur.is_empty() && cur != id {
             return "Not available";
         }
-        let confirmed = crate::ipc::get_config("fingerprint")
+        let confirmed = crate::ipc::get_config_async("fingerprint", 1_000)
             .await
             .ok()
             .flatten()

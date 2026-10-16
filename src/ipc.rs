@@ -1497,7 +1497,7 @@ pub async fn get_config(name: &str) -> ResultType<Option<String>> {
     get_config_async(name, 1_000).await
 }
 
-async fn get_config_async(name: &str, ms_timeout: u64) -> ResultType<Option<String>> {
+pub async fn get_config_async(name: &str, ms_timeout: u64) -> ResultType<Option<String>> {
     let mut c = connect(ms_timeout, "").await?;
     c.send(&Data::Config((name.to_owned(), None))).await?;
     if let Some(Data::Config((name2, value))) = c.next_timeout(ms_timeout).await? {
