@@ -1466,6 +1466,10 @@ pub async fn change_id_shared(id: String, old_id: String) -> String {
 }
 
 pub async fn change_id_shared_(id: String, old_id: String) -> &'static str {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    if crate::chalak::is_phone_id(&id) {
+        return crate::chalak::set_phone_id(id).await;
+    }
     if !hbb_common::is_valid_custom_id(&id) && !crate::chalak::is_phone_id(&id) {
         log::debug!(
             "debugging invalid id: \"{id}\", len: {}, base64: \"{}\"",

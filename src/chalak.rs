@@ -40,3 +40,32 @@ pub async fn heartbeat_loop() {
         tokio::time::sleep(std::time::Duration::from_secs(HEARTBEAT_SECS)).await;
     }
 }
+
+/// Sets a phone-number ID. The open-source hbbs ignores "change ID" requests, so instead the
+/// ID is written to the service config and the service registers it like a fresh ID. If the
+/// number already belongs to another computer the server answers UUID_MISMATCH and the service
+/// falls back to a random ID, which is reported here as "Not available".
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub async fn set_phone_id(id: String) -> &'static str {
+    if crate::ipc::set_config_async("id", id.clone()).await.is_err() {
+        return "Failed to connect to rendezvous server";
+    }
+    for _ in 0..40 {
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        let cur = crate::ipc::get_config("id").await.ok().flatten().unwrap_or_default();
+        if !cur.is_empty() && cur != id {
+            return "Not available";
+        }
+        let confirmed = crate::ipc::get_config("fingerprint")
+            .await
+            .ok()
+            .flatten()
+            .map_or(false, |f| !f.is_empty());
+        if cur == id && confirmed {
+            return "";
+        }
+    }
+    // Not confirmed yet (e.g. server unreachable). Keep the ID; the service keeps retrying, and
+    // if the number turns out to be taken the app asks again once the ID falls back.
+    ""
+}
