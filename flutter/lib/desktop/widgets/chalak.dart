@@ -8,10 +8,13 @@ import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
-const kChalakSite = 'https://chalak-desk.ir';
+// Temporary domain until chalak-desk.ir is approved.
+const kChalakSite = 'https://desk.chalak-local.ir';
 const kChalakBannerUrl = '$kChalakSite/api/banner';
 
-final _phoneRegExp = RegExp(r'^09\d{9}$');
+final _mobileRegExp = RegExp(r'^09\d{9}$');
+// Phone, or phone + one digit 2-9 for a customer's additional computers.
+final _phoneRegExp = RegExp(r'^09\d{9}[2-9]?$');
 
 bool isChalakPhoneId(String id) => _phoneRegExp.hasMatch(id);
 
@@ -47,7 +50,7 @@ void _showPhoneDialog() {
     submit() async {
       if (isInProgress) return;
       final phone = _toEnglishDigits(controller.text.trim());
-      if (!isChalakPhoneId(phone)) {
+      if (!_mobileRegExp.hasMatch(phone)) {
         setState(() => msg = 'شماره موبایل را به شکل ۰۹۱۲۱۲۳۴۵۶۷ وارد کنید');
         return;
       }
@@ -55,21 +58,29 @@ void _showPhoneDialog() {
         msg = '';
         isInProgress = true;
       });
-      bind.mainChangeId(newId: phone);
-      var status = await bind.mainGetAsyncStatus();
-      while (status == ' ') {
-        await Future.delayed(const Duration(milliseconds: 100));
+      // The same phone may be used on several computers: the first one gets the plain
+      // number, later ones get the number plus 2, 3, ... (the server rejects taken IDs).
+      var status = '';
+      for (final suffix in ['', '2', '3', '4', '5', '6', '7', '8', '9']) {
+        bind.mainChangeId(newId: phone + suffix);
         status = await bind.mainGetAsyncStatus();
-      }
-      if (status.isEmpty) {
-        _phoneDialogShown = false;
-        close();
-        return;
+        while (status == ' ') {
+          await Future.delayed(const Duration(milliseconds: 100));
+          status = await bind.mainGetAsyncStatus();
+        }
+        if (status.isEmpty) {
+          _phoneDialogShown = false;
+          close();
+          return;
+        }
+        // "Not available" / "Unknown error" mean the ID belongs to another computer.
+        if (status != 'Not available' && status != 'Unknown error') break;
+        await Future.delayed(const Duration(seconds: 1));
       }
       setState(() {
         isInProgress = false;
-        msg = status == 'Not available'
-            ? 'این شماره روی کامپیوتر دیگری ثبت شده است. با پشتیبانی تماس بگیرید.'
+        msg = status == 'Not available' || status == 'Unknown error'
+            ? 'این شماره روی کامپیوترهای زیادی ثبت شده است. با پشتیبانی تماس بگیرید.'
             : 'ثبت شماره انجام نشد. اتصال اینترنت را بررسی کنید و دوباره تلاش کنید.';
       });
     }
