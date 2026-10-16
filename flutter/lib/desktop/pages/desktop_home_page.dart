@@ -94,6 +94,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       buildTip(context),
       if (!isOutgoingOnly) buildIDBoard(context),
       if (!isOutgoingOnly) buildPasswordBoard(context),
+      const ChalakUpdateCard(),
       const ChalakBanner(),
       FutureBuilder<Widget>(
         future: Future.value(

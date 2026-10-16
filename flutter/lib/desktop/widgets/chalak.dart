@@ -177,3 +177,95 @@ class _ChalakBannerState extends State<ChalakBanner> {
     );
   }
 }
+
+const kChalakVersionUrl = '$kChalakSite/api/version';
+
+/// Compares dotted versions like 1.4.9 and 1.4.10; returns true if [a] > [b].
+bool _isNewerVersion(String a, String b) {
+  List<int> parse(String v) => v
+      .split(RegExp(r'[.\-]'))
+      .map((x) => int.tryParse(x) ?? 0)
+      .toList();
+  final pa = parse(a), pb = parse(b);
+  for (var i = 0; i < pa.length || i < pb.length; i++) {
+    final x = i < pa.length ? pa[i] : 0;
+    final y = i < pb.length ? pb[i] : 0;
+    if (x != y) return x > y;
+  }
+  return false;
+}
+
+/// New-version notice. chalak-desk.ir/api/version returns
+/// `{"version": "1.4.10", "url": "https://.../ChalakDesk.msi"}`. Hidden when up to date.
+class ChalakUpdateCard extends StatefulWidget {
+  const ChalakUpdateCard({Key? key}) : super(key: key);
+
+  @override
+  State<ChalakUpdateCard> createState() => _ChalakUpdateCardState();
+}
+
+class _ChalakUpdateCardState extends State<ChalakUpdateCard> {
+  String _version = '';
+  String _url = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final resp = await http
+          .get(Uri.parse(kChalakVersionUrl))
+          .timeout(const Duration(seconds: 10));
+      if (resp.statusCode != 200) return;
+      final data = jsonDecode(utf8.decode(resp.bodyBytes));
+      final latest = (data['version'] ?? '').toString().trim();
+      final url = (data['url'] ?? '').toString();
+      final current = await bind.mainGetVersion();
+      if (latest.isNotEmpty &&
+          url.startsWith('http') &&
+          _isNewerVersion(latest, current) &&
+          mounted) {
+        setState(() {
+          _version = latest;
+          _url = url;
+        });
+      }
+    } catch (e) {
+      debugPrint('chalak version: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_version.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A9471),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('نسخه جدید چالاک‌دسک ($_version) آماده است',
+                style: const TextStyle(color: Colors.white, fontSize: 14)),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white)),
+              onPressed: () => launchUrl(Uri.parse(_url)),
+              child: const Text('دانلود نسخه جدید'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
