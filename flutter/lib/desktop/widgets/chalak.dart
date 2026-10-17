@@ -8,8 +8,8 @@ import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
-// Temporary domain until chalak-desk.ir is approved.
-const kChalakSite = 'https://desk.chalak-local.ir';
+// ChalakDesk site.
+const kChalakSite = 'https://chalak-desk.ir';
 const kChalakBannerUrl = '$kChalakSite/api/banner';
 
 final _mobileRegExp = RegExp(r'^09\d{9}$');

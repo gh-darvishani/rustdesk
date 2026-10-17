@@ -1,9 +1,9 @@
 // ChalakDesk: phone-number IDs and online reporting to the support panel.
 use hbb_common::{config::Config, log, tokio};
 
-// Temporary domain until chalak-desk.ir is approved.
-pub const SITE: &str = "https://desk.chalak-local.ir";
-const HEARTBEAT_URL: &str = "https://desk.chalak-local.ir/api/devices/heartbeat";
+// ChalakDesk site.
+pub const SITE: &str = "https://chalak-desk.ir";
+const HEARTBEAT_URL: &str = "https://chalak-desk.ir/api/devices/heartbeat";
 const HEARTBEAT_SECS: u64 = 60;
 
 /// Iranian mobile number (09121234567), optionally followed by one digit 2-9 for a
