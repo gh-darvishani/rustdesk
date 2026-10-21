@@ -84,7 +84,8 @@ class ConnectStatus: Reactor.Component {
         } else if (connect_status == 0) {
             return translate('connecting_status');
         }
-        if (!handler.using_public_server()) return translate('Ready');
+        // ChalakDesk: no "set up your own server" link.
+        return translate('Ready');
         return <span>{translate("Ready")}, <span .link #setup-server>{translate("setup_server_tip")}</span></span>;
     }
 
@@ -714,7 +715,7 @@ class App: Reactor.Component
             <div .app>
                     <div .left-pane style={incoming_only ? "width:*" : ""}>
                     <div>
-                        {is_custom_client && handler.get_builtin_option("hide-powered-by-me") != "Y" ? <div .link #powered-by style="opacity:0.5;font-size:0.8em;text-decoration:underline">{translate('powered_by_me')}</div> : ""}
+                        {false ? <div .link #powered-by style="opacity:0.5;font-size:0.8em;text-decoration:underline">{translate('powered_by_me')}</div> : ""}
                         <div .title style="flow:horizontal; position:relative; height:1.6em; line-height:1.6em">
                             <span>{translate('Your Desktop')}</span>
                             {outgoing_only ? <span .link #open-settings style="position:absolute; right:0; bottom:0; transform:scale(0.6); transform-origin:right bottom; opacity:0.85">{svg_menu}</span> : ""}
@@ -1414,9 +1415,58 @@ function showSettings() {
     });
 }
 
+// ChalakDesk: the ID is the customer's mobile number (plus 2-9 for extra computers).
+var chalak_phone_dialog = false;
+function chalakToEnglishDigits(s) {
+    var fa = "۰۱۲۳۴۵۶۷۸۹", ar = "٠١٢٣٤٥٦٧٨٩", out = "";
+    for (var i = 0; i < s.length; ++i) {
+        var ch = s[i];
+        var k = fa.indexOf(ch);
+        if (k < 0) k = ar.indexOf(ch);
+        out += k >= 0 ? String.printf("%d", k) : ch;
+    }
+    return out;
+}
+function checkChalakPhoneId() {
+    if (chalak_phone_dialog || !key_confirmed || connect_status <= 0) return;
+    if (/^09\d{9}[2-9]?$/.test(my_id)) return;
+    chalak_phone_dialog = true;
+    msgbox("custom-nocancel-phone", "شماره موبایل شما", "<div .form .set-password> \
+        <div>لطفاً شماره موبایل خود را وارد کنید. پشتیبان‌های چالاک با همین شماره به کامپیوتر شما وصل می‌شوند.</div> \
+        <div><input|text .outline-focus style='width: 250px' name='phone' maxlength='11' /></div> \
+        </div>", "", function(res=null, show_progress) {
+            if (!res) { chalak_phone_dialog = false; return; }
+            var phone = chalakToEnglishDigits((res.phone || "").trim());
+            if (!/^09\d{9}$/.test(phone)) return "شماره موبایل را به شکل 09121234567 وارد کنید";
+            show_progress();
+            var suffixes = ["", "2", "3", "4", "5", "6", "7", "8", "9"];
+            var idx = 0;
+            function try_next() {
+                handler.change_id(phone + suffixes[idx]);
+                function check_status() {
+                    var status = handler.get_async_job_status();
+                    if (status == " ") { self.timer(0.1s, check_status); return; }
+                    if (!status) { chalak_phone_dialog = false; show_progress(-1); return; }
+                    if ((status == "Not available" || status == "Unknown error") && idx + 1 < suffixes.length) {
+                        idx += 1;
+                        self.timer(1s, try_next);
+                        return;
+                    }
+                    show_progress(false, status == "Not available" || status == "Unknown error"
+                        ? "این شماره روی کامپیوترهای زیادی ثبت شده است. با پشتیبانی تماس بگیرید."
+                        : "ثبت شماره انجام نشد. اتصال اینترنت را بررسی کنید و دوباره تلاش کنید.");
+                }
+                check_status();
+            }
+            try_next();
+            return " ";
+        }, msgbox_default_height, get_msgbox_width());
+}
+
 function checkConnectStatus() {
     handler.check_mouse_time(); // trigger connection status updater
     self.timer(1s, function() {
+        checkChalakPhoneId();
         var tmp = handler.get_option("stop-service") == "Y";
         if (tmp != service_stopped) {
             service_stopped = tmp;
