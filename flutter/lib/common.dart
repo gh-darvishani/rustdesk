@@ -3737,7 +3737,8 @@ Color? disabledTextColor(BuildContext context, bool enabled) {
 }
 
 Widget loadPowered(BuildContext context) {
-  if (bind.mainGetBuildinOption(key: "hide-powered-by-me") == 'Y') {
+  // ChalakDesk: no "Powered by RustDesk".
+  if (true) {
     return SizedBox.shrink();
   }
   return MouseRegion(
