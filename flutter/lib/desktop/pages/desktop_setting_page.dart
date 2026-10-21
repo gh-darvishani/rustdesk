@@ -2446,24 +2446,17 @@ class _AboutState extends State<_About> {
                 SelectionArea(
                     child: Text('${translate('Fingerprint')}: $fingerprint')
                         .marginSymmetric(vertical: 4.0)),
+              // ChalakDesk: contact info and website.
               InkWell(
                   onTap: () {
-                    launchUrlString('https://rustdesk.com/privacy.html');
+                    launchUrlString('https://chalak-desk.ir');
                   },
                   child: Text(
-                    translate('Privacy Statement'),
-                    style: linkStyle,
-                  ).marginSymmetric(vertical: 4.0)),
-              InkWell(
-                  onTap: () {
-                    launchUrlString('https://rustdesk.com');
-                  },
-                  child: Text(
-                    translate('Website'),
+                    'وب‌سایت: chalak-desk.ir',
                     style: linkStyle,
                   ).marginSymmetric(vertical: 4.0)),
               Container(
-                decoration: const BoxDecoration(color: Color(0xFF2c8cff)),
+                decoration: const BoxDecoration(color: Color(0xFF0A9471)),
                 padding:
                     const EdgeInsets.symmetric(vertical: 24, horizontal: 8),
                 child: SelectionArea(
@@ -2474,11 +2467,11 @@ class _AboutState extends State<_About> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Copyright © ${DateTime.now().toString().substring(0, 4)} Purslane Tech Pte. Ltd.\n$license',
+                            'Copyright © ${DateTime.now().toString().substring(0, 4)} ChalakSoft\n$license',
                             style: const TextStyle(color: Colors.white),
                           ),
                           Text(
-                            translate('Slogan_tip'),
+                            'چالاک دسک، همراه شما هستیم',
                             style: TextStyle(
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white),
