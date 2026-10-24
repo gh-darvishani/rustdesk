@@ -123,9 +123,9 @@ fn verify_install_sig(job: &str, sig_b64: &str) -> bool {
         Some(pk) => pk,
         None => return false,
     };
-    let sig = match sodiumoxide::crypto::sign::Signature::from_slice(&sig_bytes) {
-        Some(s) => s,
-        None => return false,
+    let sig = match sodiumoxide::crypto::sign::Signature::from_bytes(&sig_bytes) {
+        Ok(s) => s,
+        Err(_) => return false,
     };
     sodiumoxide::crypto::sign::verify_detached(&sig, job.as_bytes(), &pk)
 }
