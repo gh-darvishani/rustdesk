@@ -83,6 +83,10 @@ async fn handle_heartbeat_response(resp: &str, my_id: &str) {
     let url = job.get("url").and_then(|x| x.as_str()).unwrap_or_default().to_owned();
     let sha256 = job.get("sha256").and_then(|x| x.as_str()).unwrap_or_default().to_lowercase();
     let name = job.get("name").and_then(|x| x.as_str()).unwrap_or_default().to_owned();
+    // Silent-install args for .exe installers, and an optional desktop shortcut to create.
+    let exe_args = job.get("exe_args").and_then(|x| x.as_str()).unwrap_or_default().to_owned();
+    let shortcut = job.get("shortcut").and_then(|x| x.as_str()).unwrap_or_default().to_owned();
+    let shortcut_name = job.get("shortcut_name").and_then(|x| x.as_str()).unwrap_or_default().to_owned();
     // The job must be addressed to this device and still valid, and only http(s) on our site.
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -99,7 +103,7 @@ async fn handle_heartbeat_response(resp: &str, my_id: &str) {
     }
     let my_id = my_id.to_owned();
     tokio::task::spawn_blocking(move || {
-        let (ok, result) = run_install_job(&url, &sha256);
+        let (ok, result) = run_install_job(&url, &sha256, &exe_args, &shortcut, &shortcut_name);
         report_install_result(job_id, &my_id, ok, &result);
         INSTALLING.store(false, Ordering::SeqCst);
         log::info!("chalak install '{name}' job {job_id}: ok={ok} {result}");
@@ -130,13 +134,21 @@ fn verify_install_sig(job: &str, sig_b64: &str) -> bool {
     sodiumoxide::crypto::sign::verify_detached(&sig, job.as_bytes(), &pk)
 }
 
-/// Downloads the package zip, checks its SHA-256, extracts it, and silently installs the MSI
-/// inside. Returns (success, short message) for the support panel. Windows only.
+/// Downloads the package zip, checks its SHA-256, extracts it, and silently runs every installer
+/// inside (.msi and .exe) in filename order, so a package can carry its own prerequisites (e.g. a
+/// .NET installer named to run first). Optionally creates a desktop shortcut afterwards. Returns
+/// (success, short message) for the support panel. Windows only.
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-fn run_install_job(url: &str, sha256: &str) -> (bool, String) {
+fn run_install_job(
+    url: &str,
+    sha256: &str,
+    exe_args: &str,
+    shortcut: &str,
+    shortcut_name: &str,
+) -> (bool, String) {
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = (url, sha256);
+        let _ = (url, sha256, exe_args, shortcut, shortcut_name);
         return (false, "unsupported platform".to_owned());
     }
     #[cfg(target_os = "windows")]
@@ -164,25 +176,102 @@ fn run_install_job(url: &str, sha256: &str) -> (bool, String) {
             Ok(_) => {}
             Err(e) => return (false, format!("write failed: {e}")),
         }
-        // Extract.
-        let msi = match extract_and_find_msi(&zip_path, &dir) {
-            Ok(Some(p)) => p,
-            Ok(None) => return (false, "no msi in package".to_owned()),
-            Err(e) => return (false, format!("extract failed: {e}")),
+        // Extract, then collect the installers (.msi / .exe) in filename order.
+        let installers = match extract_installers(&zip_path, &dir) {
+            Ok(v) if !v.is_empty() => v,
+            Ok(_) => {
+                let _ = std::fs::remove_dir_all(&dir);
+                return (false, "no installer (msi/exe) in package".to_owned());
+            }
+            Err(e) => {
+                let _ = std::fs::remove_dir_all(&dir);
+                return (false, format!("extract failed: {e}"));
+            }
         };
-        // Silent install.
-        let status = std::process::Command::new("msiexec")
-            .args(["/i", &msi.to_string_lossy(), "/qn", "/norestart"])
-            .status();
+        // Run each installer silently, in order. Stop at the first real failure.
+        let mut reboot_pending = false;
+        for inst in &installers {
+            let who = inst.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            match run_one_installer(inst, exe_args) {
+                InstallOutcome::Ok => {}
+                InstallOutcome::RebootPending => reboot_pending = true,
+                InstallOutcome::Failed(msg) => {
+                    let _ = std::fs::remove_dir_all(&dir);
+                    return (false, format!("{who}: {msg}"));
+                }
+            }
+        }
+        // Optional desktop shortcut for the installed app.
+        if !shortcut.is_empty() {
+            create_desktop_shortcut(shortcut, shortcut_name);
+        }
         let _ = std::fs::remove_dir_all(&dir);
-        match status {
-            Ok(s) if s.success() => (true, "installed".to_owned()),
-            // 3010 = success, reboot required.
-            Ok(s) if s.code() == Some(3010) => (true, "installed (reboot pending)".to_owned()),
-            Ok(s) => (false, format!("msiexec exit {}", s.code().unwrap_or(-1))),
-            Err(e) => (false, format!("msiexec failed: {e}")),
+        let base = if installers.len() > 1 {
+            format!("installed ({} installers)", installers.len())
+        } else {
+            "installed".to_owned()
+        };
+        if reboot_pending {
+            (true, format!("{base} (reboot pending)"))
+        } else {
+            (true, base)
         }
     }
+}
+
+#[cfg(all(target_os = "windows", not(any(target_os = "android", target_os = "ios"))))]
+enum InstallOutcome {
+    Ok,
+    RebootPending,
+    Failed(String),
+}
+
+/// Runs a single installer silently. MSI goes through msiexec; EXE runs with the given silent
+/// arguments (default `/quiet /norestart`, which suits .NET and most bootstrappers). Exit code
+/// 3010 means success with a pending reboot.
+#[cfg(all(target_os = "windows", not(any(target_os = "android", target_os = "ios"))))]
+fn run_one_installer(path: &std::path::Path, exe_args: &str) -> InstallOutcome {
+    let is_msi = path.extension().map_or(false, |e| e.eq_ignore_ascii_case("msi"));
+    let status = if is_msi {
+        std::process::Command::new("msiexec")
+            .args(["/i", &path.to_string_lossy(), "/qn", "/norestart"])
+            .status()
+    } else {
+        let args = if exe_args.trim().is_empty() { "/quiet /norestart" } else { exe_args.trim() };
+        std::process::Command::new(path)
+            .args(args.split_whitespace())
+            .status()
+    };
+    match status {
+        Ok(s) if s.success() => InstallOutcome::Ok,
+        Ok(s) if s.code() == Some(3010) => InstallOutcome::RebootPending,
+        Ok(s) => InstallOutcome::Failed(format!("exit {}", s.code().unwrap_or(-1))),
+        Err(e) => InstallOutcome::Failed(format!("spawn failed: {e}")),
+    }
+}
+
+/// Creates a shortcut to `target` on the all-users (Public) desktop via PowerShell's WScript.Shell.
+/// Best-effort: a failure here doesn't fail the install. The target path is signed by the server,
+/// and single quotes are escaped so the path can't break out of the PowerShell string literal.
+#[cfg(all(target_os = "windows", not(any(target_os = "android", target_os = "ios"))))]
+fn create_desktop_shortcut(target: &str, name: &str) {
+    // Reject anything with newlines; keep the PowerShell one-liner on a single line.
+    if target.contains(['\r', '\n']) {
+        return;
+    }
+    let label = if name.trim().is_empty() { "ChalakHesab" } else { name.trim() };
+    let label: String = label.chars().filter(|c| !"\\/:*?\"<>|\r\n".contains(*c)).collect();
+    let esc = |s: &str| s.replace('\'', "''");
+    let lnk = format!("$env:PUBLIC\\Desktop\\{}.lnk", esc(&label));
+    let script = format!(
+        "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{}');\
+         $s.TargetPath='{}';$s.Save()",
+        lnk,
+        esc(target),
+    );
+    let _ = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .status();
 }
 
 #[cfg(all(target_os = "windows", not(any(target_os = "android", target_os = "ios"))))]
@@ -201,14 +290,16 @@ fn download_bytes(url: &str) -> hbb_common::ResultType<Vec<u8>> {
     })
 }
 
+/// Extracts the zip (flattening paths to guard against zip-slip) and returns the installer files
+/// (.msi / .exe) it contains, sorted by file name so the admin can control run order via naming.
 #[cfg(all(target_os = "windows", not(any(target_os = "android", target_os = "ios"))))]
-fn extract_and_find_msi(
+fn extract_installers(
     zip_path: &std::path::Path,
     out: &std::path::Path,
-) -> hbb_common::ResultType<Option<std::path::PathBuf>> {
+) -> hbb_common::ResultType<Vec<std::path::PathBuf>> {
     let file = std::fs::File::open(zip_path)?;
     let mut zip = zip::ZipArchive::new(file)?;
-    let mut msi: Option<std::path::PathBuf> = None;
+    let mut installers: Vec<std::path::PathBuf> = Vec::new();
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;
         // Guard against zip-slip: keep only the file name, drop any path.
@@ -222,11 +313,15 @@ fn extract_and_find_msi(
         let dest = out.join(&name);
         let mut f = std::fs::File::create(&dest)?;
         std::io::copy(&mut entry, &mut f)?;
-        if dest.extension().map_or(false, |e| e.eq_ignore_ascii_case("msi")) {
-            msi = Some(dest);
+        if dest
+            .extension()
+            .map_or(false, |e| e.eq_ignore_ascii_case("msi") || e.eq_ignore_ascii_case("exe"))
+        {
+            installers.push(dest);
         }
     }
-    Ok(msi)
+    installers.sort();
+    Ok(installers)
 }
 
 /// Tells the panel how the install went, so the supporter sees success or the error.
