@@ -207,6 +207,8 @@ class _ConnectionPageState extends State<ConnectionPage>
   String selectedConnectionType = 'Connect';
 
   bool isWindowMinimized = false;
+  // ChalakDesk: the recent-desktops list is hidden by default; an arrow toggles it.
+  bool _showPeers = false;
 
   final AllPeersLoader _allPeersLoader = AllPeersLoader();
 
@@ -317,10 +319,22 @@ class _ConnectionPageState extends State<ConnectionPage>
             ).marginOnly(top: 22),
             SizedBox(height: 12),
             Divider().paddingOnly(right: 12),
+            // ChalakDesk: a single arrow toggles the recent-desktops list, which is hidden
+            // by default. Up arrow reveals it, down arrow hides it again.
+            Center(
+              child: IconButton(
+                icon: Icon(_showPeers
+                    ? Icons.keyboard_arrow_down
+                    : Icons.keyboard_arrow_up),
+                tooltip: _showPeers ? 'مخفی کردن لیست' : 'نمایش لیست دسکتاپ‌ها',
+                onPressed: () => setState(() => _showPeers = !_showPeers),
+              ),
+            ),
             // ChalakDesk: Persian UI, peers start from the right.
-            Expanded(
-                child: Directionality(
-                    textDirection: TextDirection.rtl, child: PeerTabPage())),
+            if (_showPeers)
+              Expanded(
+                  child: Directionality(
+                      textDirection: TextDirection.rtl, child: PeerTabPage())),
           ],
         ).paddingOnly(left: 12.0)),
         if (!isOutgoingOnly) const Divider(height: 1),
