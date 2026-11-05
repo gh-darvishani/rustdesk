@@ -304,7 +304,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   Widget _infoField({
     required String label,
     required IconData icon,
-    required ValueListenable<TextEditingValue> valueListenable,
+    required TextEditingController valueListenable,
     required double valueFontSize,
     required List<Widget> actions,
   }) {
