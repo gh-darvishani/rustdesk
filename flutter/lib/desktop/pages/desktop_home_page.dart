@@ -36,6 +36,12 @@ class DesktopHomePage extends StatefulWidget {
 
 const borderColor = Color(0xFF2F65BA);
 
+// ChalakDesk brand palette (home redesign).
+const _kBrandBlue = Color(0xFF2F6AD6);
+const _kBrandBlueDark = Color(0xFF1E4FA8);
+const _kBrandInk = Color(0xFF1A2A44);
+const _kBrandMuted = Color(0xFF6B7A90);
+
 class _DesktopHomePageState extends State<DesktopHomePage>
     with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   final _leftPaneScrollController = ScrollController();
@@ -51,6 +57,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   var watchIsCanRecordAudio = false;
   Timer? _updateTimer;
   bool isCardClosed = false;
+  // ChalakDesk: whether the "connect to peer" panel is expanded.
+  bool _connectOpen = false;
 
   final RxBool _editHover = false.obs;
   final RxBool _block = false.obs;
@@ -60,20 +68,12 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final isIncomingOnly = bind.isIncomingOnly();
-    // ChalakDesk: Persian UI, right-aligned — the ID/password pane sits on the right.
     return _buildBlock(
-        child: Directionality(
-      textDirection: TextDirection.rtl,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          buildLeftPane(context),
-          if (!isIncomingOnly) const VerticalDivider(width: 1),
-          if (!isIncomingOnly) Expanded(child: buildRightPane(context)),
-        ],
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: _buildHome(context),
       ),
-    ));
+    );
   }
 
   Widget _buildBlock({required Widget child}) {
@@ -81,356 +81,521 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         block: _block, mask: true, use: canBeBlocked, child: child);
   }
 
-  Widget buildLeftPane(BuildContext context) {
-    final isIncomingOnly = bind.isIncomingOnly();
-    final isOutgoingOnly = bind.isOutgoingOnly();
-    final children = <Widget>[
-      if (!isOutgoingOnly) buildPresetPasswordWarning(),
-      if (bind.isCustomClient())
-        Align(
-          alignment: Alignment.center,
-          child: loadPowered(context),
-        ),
-      Align(
-        alignment: Alignment.center,
-        child: loadLogo(),
-      ),
-      buildTip(context),
-      if (!isOutgoingOnly) buildIDBoard(context),
-      if (!isOutgoingOnly) buildPasswordBoard(context),
-      const ChalakUpdateCard(),
-      const ChalakBanner(),
-      FutureBuilder<Widget>(
-        future: Future.value(
-            Obx(() => buildHelpCards(stateGlobal.updateUrl.value))),
-        builder: (_, data) {
-          if (data.hasData) {
-            if (isIncomingOnly) {
-              if (isInHomePage()) {
-                Future.delayed(Duration(milliseconds: 300), () {
-                  _updateWindowSize();
-                });
-              }
-            }
-            return data.data!;
-          } else {
-            return const Offstage();
-          }
-        },
-      ),
-      buildPluginEntry(),
-    ];
-    if (isIncomingOnly) {
-      children.addAll([
-        Divider(),
-        OnlineStatusWidget(
-          onSvcStatusChanged: () {
-            if (isInHomePage()) {
-              Future.delayed(Duration(milliseconds: 300), () {
-                _updateWindowSize();
-              });
-            }
-          },
-        ).marginOnly(bottom: 6, right: 6)
-      ]);
-    }
-    final textColor = Theme.of(context).textTheme.titleLarge?.color;
-    return ChangeNotifierProvider.value(
-      value: gFFI.serverModel,
-      child: Container(
-        width: isIncomingOnly ? 280.0 : 200.0,
-        color: Theme.of(context).colorScheme.background,
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                SingleChildScrollView(
-                  controller: _leftPaneScrollController,
-                  child: Column(
-                    key: _childKey,
-                    children: children,
-                  ),
-                ),
-                Expanded(child: Container())
-              ],
-            ),
-            if (isOutgoingOnly)
-              Positioned(
-                bottom: 6,
-                left: 12,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: InkWell(
-                    child: Obx(
-                      () => Icon(
-                        Icons.settings,
-                        color: _editHover.value
-                            ? textColor
-                            : Colors.grey.withOpacity(0.5),
-                        size: 22,
-                      ),
-                    ),
-                    onTap: () => {
-                      if (DesktopSettingPage.tabKeys.isNotEmpty)
-                        {
-                          DesktopSettingPage.switch2page(
-                              DesktopSettingPage.tabKeys[0])
-                        }
-                    },
-                    onHover: (value) => _editHover.value = value,
-                  ),
-                ),
-              )
+  Widget _buildHome(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFFEAF2FD),
+            Color(0xFFF6F9FF),
+            Colors.white,
           ],
+          stops: [0.0, 0.45, 1.0],
         ),
       ),
-    );
-  }
-
-  buildRightPane(BuildContext context) {
-    return Container(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: ConnectionPage(),
-    );
-  }
-
-  buildIDBoard(BuildContext context) {
-    final model = gFFI.serverModel;
-    return Container(
-      margin: const EdgeInsets.only(left: 20, right: 11),
-      height: 57,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
-        children: [
-          Container(
-            width: 2,
-            decoration: const BoxDecoration(color: MyTheme.accent),
-          ).marginOnly(top: 5),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 7),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    height: 25,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          translate("ID"),
-                          style: TextStyle(
-                              fontSize: 14,
-                              color: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.color
-                                  ?.withOpacity(0.5)),
-                        ).marginOnly(top: 5),
-                        buildPopupMenu(context)
-                      ],
-                    ),
-                  ),
-                  Flexible(
-                    child: GestureDetector(
-                      onDoubleTap: () {
-                        Clipboard.setData(
-                            ClipboardData(text: model.serverId.text));
-                        showToast(translate("Copied"));
-                      },
-                      child: TextFormField(
-                        controller: model.serverId,
-                        readOnly: true,
-                        decoration: InputDecoration(
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.only(top: 10, bottom: 10),
-                        ),
-                        style: TextStyle(
-                          fontSize: 22,
-                        ),
-                      ).workaroundFreezeLinuxMint(),
-                    ),
-                  )
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget buildPopupMenu(BuildContext context) {
-    final textColor = Theme.of(context).textTheme.titleLarge?.color;
-    RxBool hover = false.obs;
-    return InkWell(
-      onTap: DesktopTabPage.onAddSetting,
-      child: Tooltip(
-        message: translate('Settings'),
-        child: Obx(
-          () => CircleAvatar(
-            radius: 15,
-            backgroundColor: hover.value
-                ? Theme.of(context).scaffoldBackgroundColor
-                : Theme.of(context).colorScheme.background,
-            child: Icon(
-              Icons.more_vert_outlined,
-              size: 20,
-              color: hover.value ? textColor : textColor?.withOpacity(0.5),
-            ),
-          ),
-        ),
-      ),
-      onHover: (value) => hover.value = value,
-    );
-  }
-
-  buildPasswordBoard(BuildContext context) {
-    return ChangeNotifierProvider.value(
-        value: gFFI.serverModel,
-        child: Consumer<ServerModel>(
-          builder: (context, model, child) {
-            return buildPasswordBoard2(context, model);
-          },
-        ));
-  }
-
-  buildPasswordBoard2(BuildContext context, ServerModel model) {
-    RxBool refreshHover = false.obs;
-    RxBool editHover = false.obs;
-    final textColor = Theme.of(context).textTheme.titleLarge?.color;
-    final showOneTime = model.approveMode != 'click' &&
-        model.verificationMethod != kUsePermanentPassword;
-    return Container(
-      margin: EdgeInsets.only(left: 20.0, right: 16, top: 13, bottom: 13),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
-        children: [
-          Container(
-            width: 2,
-            height: 52,
-            decoration: BoxDecoration(color: MyTheme.accent),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 7),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AutoSizeText(
-                    translate("One-time Password"),
-                    style: TextStyle(
-                        fontSize: 14, color: textColor?.withOpacity(0.5)),
-                    maxLines: 1,
-                  ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onDoubleTap: () {
-                            if (showOneTime) {
-                              Clipboard.setData(
-                                  ClipboardData(text: model.serverPasswd.text));
-                              showToast(translate("Copied"));
-                            }
-                          },
-                          child: TextFormField(
-                            controller: model.serverPasswd,
-                            readOnly: true,
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              contentPadding:
-                                  EdgeInsets.only(top: 14, bottom: 10),
-                            ),
-                            style: TextStyle(fontSize: 15),
-                          ).workaroundFreezeLinuxMint(),
-                        ),
-                      ),
-                      if (showOneTime)
-                        AnimatedRotationWidget(
-                          onPressed: () => bind.mainUpdateTemporaryPassword(),
-                          child: Tooltip(
-                            message: translate('Refresh Password'),
-                            child: Obx(() => RotatedBox(
-                                quarterTurns: 2,
-                                child: Icon(
-                                  Icons.refresh,
-                                  color: refreshHover.value
-                                      ? textColor
-                                      : Color(0xFFDDDDDD),
-                                  size: 22,
-                                ))),
-                          ),
-                          onHover: (value) => refreshHover.value = value,
-                        ).marginOnly(right: 8, top: 4),
-                      if (!bind.isDisableSettings())
-                        InkWell(
-                          child: Tooltip(
-                            message: translate('Change Password'),
-                            child: Obx(
-                              () => Icon(
-                                Icons.edit,
-                                color: editHover.value
-                                    ? textColor
-                                    : Color(0xFFDDDDDD),
-                                size: 22,
-                              ).marginOnly(right: 8, top: 4),
-                            ),
-                          ),
-                          onTap: () => DesktopSettingPage.switch2page(
-                              SettingsTabKey.safety),
-                          onHover: (value) => editHover.value = value,
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  buildTip(BuildContext context) {
-    final isOutgoingOnly = bind.isOutgoingOnly();
-    return Padding(
-      padding:
-          const EdgeInsets.only(left: 20.0, right: 16, top: 16.0, bottom: 5),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
+          _buildHeader(context),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(28, 10, 28, 24),
+              child: LayoutBuilder(builder: (context, c) {
+                final wide = c.maxWidth >= 760;
+                final access = _buildAccessCard(context);
+                final about = _buildAboutCard(context);
+                final cards = wide
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 3, child: access),
+                          const SizedBox(width: 20),
+                          Expanded(flex: 2, child: about),
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          access,
+                          const SizedBox(height: 20),
+                          about,
+                        ],
+                      );
+                return Column(
+                  children: [
+                    cards,
+                    _buildExtras(context),
+                  ],
+                );
+              }),
+            ),
+          ),
+          _buildFooter(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(28, 18, 28, 18),
+      child: Row(
+        children: [
+          _brandMark(size: 44),
+          const SizedBox(width: 12),
+          const Text(
+            'چالاک سافت',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: _kBrandInk,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Container(
+            width: 1.5,
+            height: 26,
+            color: const Color(0xFFCBD9EC),
+          ),
+          const SizedBox(width: 16),
+          const Flexible(
+            child: Text(
+              'دسترسی و پشتیبانی از راه دور دستگاه',
+              style: TextStyle(fontSize: 15, color: _kBrandMuted),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const Spacer(),
+        ],
+      ),
+    );
+  }
+
+  Widget _brandMark({double size = 44}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_kBrandBlue, _kBrandBlueDark],
+        ),
+        borderRadius: BorderRadius.circular(size * 0.28),
+        boxShadow: [
+          BoxShadow(
+            color: _kBrandBlue.withOpacity(0.35),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Icon(Icons.desktop_windows_rounded,
+          color: Colors.white, size: size * 0.52),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(26),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE4EDFA)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2F6AD6).withOpacity(0.07),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _iconChip(IconData icon, {double size = 56}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: const Color(0xFFDEEAFD),
+        borderRadius: BorderRadius.circular(size * 0.3),
+      ),
+      child: Icon(icon, color: _kBrandBlue, size: size * 0.5),
+    );
+  }
+
+  Widget _buildAccessCard(BuildContext context) {
+    final model = gFFI.serverModel;
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (!isOutgoingOnly)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    translate("Your Desktop"),
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
+              const Text(
+                'دسترسی شما',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  color: _kBrandInk,
                 ),
+              ),
+              const SizedBox(width: 16),
+              _iconChip(Icons.desktop_windows_rounded, size: 58),
             ],
           ),
-          SizedBox(
-            height: 10.0,
+          const SizedBox(height: 14),
+          const Text(
+            'این شناسه و رمز را در اختیار پشتیبان خود قرار دهید تا به دستگاه شما متصل شود.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 15, height: 1.7, color: _kBrandMuted),
           ),
-          if (!isOutgoingOnly)
-            Text(
-              translate("desk_tip"),
-              overflow: TextOverflow.clip,
-              style: Theme.of(context).textTheme.bodySmall,
+          const SizedBox(height: 22),
+          _infoField(
+            label: 'شناسه (ID)',
+            icon: Icons.person_outline_rounded,
+            valueListenable: model.serverId,
+            valueFontSize: 26,
+            actions: [
+              _pillButton(
+                icon: Icons.copy_rounded,
+                tooltip: translate('Copy'),
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: model.serverId.text));
+                  showToast(translate("Copied"));
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _infoField(
+            label: 'رمز عبور یکبار مصرف',
+            icon: Icons.lock_outline_rounded,
+            valueListenable: model.serverPasswd,
+            valueFontSize: 24,
+            actions: [
+              _pillButton(
+                icon: Icons.refresh_rounded,
+                tooltip: translate('Refresh Password'),
+                onTap: () => bind.mainUpdateTemporaryPassword(),
+              ),
+              const SizedBox(width: 8),
+              _pillButton(
+                icon: Icons.copy_rounded,
+                tooltip: translate('Copy'),
+                onTap: () {
+                  Clipboard.setData(
+                      ClipboardData(text: model.serverPasswd.text));
+                  showToast(translate("Copied"));
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _buildConnectExpandable(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoField({
+    required String label,
+    required IconData icon,
+    required ValueListenable<TextEditingValue> valueListenable,
+    required double valueFontSize,
+    required List<Widget> actions,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF4FD),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE0EAF8)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 14, color: _kBrandMuted),
+          ),
+          const SizedBox(width: 8),
+          Icon(icon, size: 20, color: _kBrandMuted),
+          Expanded(
+            child: Center(
+              child: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: valueListenable,
+                builder: (_, v, __) => Text(
+                  v.text,
+                  textDirection: TextDirection.ltr,
+                  style: TextStyle(
+                    fontSize: valueFontSize,
+                    fontWeight: FontWeight.w800,
+                    color: _kBrandInk,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
             ),
-          if (isOutgoingOnly)
-            Text(
-              translate("outgoing_only_desk_tip"),
-              overflow: TextOverflow.clip,
-              style: Theme.of(context).textTheme.bodySmall,
+          ),
+          ...actions,
+        ],
+      ),
+    );
+  }
+
+  Widget _pillButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Tooltip(
+          message: tooltip,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFDDE7F6)),
             ),
+            child: Icon(icon, size: 20, color: _kBrandBlue),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConnectExpandable(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE0EAF8)),
+      ),
+      child: Column(
+        children: [
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => setState(() => _connectOpen = !_connectOpen),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    _iconChip(Icons.swap_horiz_rounded, size: 42),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'اتصال به دستگاه مقابل',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: _kBrandInk,
+                      ),
+                    ),
+                    const Spacer(),
+                    AnimatedRotation(
+                      turns: _connectOpen ? 0.5 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: const Icon(Icons.keyboard_arrow_down_rounded,
+                          color: _kBrandMuted, size: 28),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            firstChild: const SizedBox(width: double.infinity, height: 0),
+            secondChild: Container(
+              height: 430,
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Color(0xFFE0EAF8))),
+              ),
+              child: ConnectionPage(),
+            ),
+            crossFadeState: _connectOpen
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 200),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAboutCard(BuildContext context) {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Text(
+                'درباره برنامه',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: _kBrandInk,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: const BoxDecoration(
+                  color: _kBrandBlue,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.info_outline_rounded,
+                    color: Colors.white, size: 20),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'چالاک سافت، راهکاری امن و ساده برای دسترسی و پشتیبانی از راه دور دستگاه‌هاست.',
+            style: TextStyle(fontSize: 15, height: 1.8, color: _kBrandMuted),
+          ),
+          const SizedBox(height: 22),
+          _laptopsArt(),
+        ],
+      ),
+    );
+  }
+
+  Widget _laptopsArt() {
+    return Container(
+      height: 150,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFEFF5FE), Color(0xFFE2ECFB)],
+        ),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.laptop_mac_rounded,
+              size: 64, color: _kBrandBlue.withOpacity(0.85)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: _kBrandBlue.withOpacity(0.25),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.swap_horiz_rounded,
+                  color: _kBrandBlue, size: 22),
+            ),
+          ),
+          Icon(Icons.laptop_windows_rounded,
+              size: 64, color: _kBrandBlueDark.withOpacity(0.85)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExtras(BuildContext context) {
+    final isOutgoingOnly = bind.isOutgoingOnly();
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 620),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!isOutgoingOnly) buildPresetPasswordWarning(),
+          const ChalakUpdateCard(),
+          const ChalakBanner(),
+          Obx(() => buildHelpCards(stateGlobal.updateUrl.value)),
+          buildPluginEntry(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooter(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(28, 10, 28, 14),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFFE4EDFA))),
+      ),
+      child: Row(
+        children: [
+          Obx(() {
+            final stopped = svcStopped.value;
+            final s = stateGlobal.svcStatus.value;
+            String label;
+            Color dot;
+            if (stopped) {
+              label = 'سرویس متوقف است';
+              dot = const Color(0xFFE04F5F);
+            } else if (s == SvcStatus.connecting) {
+              label = 'در حال اتصال…';
+              dot = const Color(0xFFF0A020);
+            } else if (s == SvcStatus.ready) {
+              label = 'آماده به کار';
+              dot = _kBrandBlue;
+            } else {
+              label = 'در حال آماده‌سازی…';
+              dot = const Color(0xFFF0A020);
+            }
+            return Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 8),
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        color: _kBrandInk,
+                        fontWeight: FontWeight.w600)),
+              ],
+            );
+          }),
+          const Spacer(),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: DesktopTabPage.onAddSetting,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                child: Row(
+                  children: [
+                    const Icon(Icons.settings_rounded,
+                        size: 20, color: _kBrandMuted),
+                    const SizedBox(width: 6),
+                    Text('تنظیمات',
+                        style: const TextStyle(
+                            fontSize: 14, color: _kBrandMuted)),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
