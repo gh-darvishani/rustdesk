@@ -166,10 +166,16 @@ void runMainApp(bool startService) async {
     if (handledByUniLinks || handleUriLink(cmdArgs: kBootArgs)) {
       windowManager.hide();
     } else {
-      windowManager.show();
-      windowManager.focus();
-      // Move registration of active main window here to prevent from async visible check.
-      rustDeskWinManager.registerActiveWindow(kWindowMainId);
+      // Defer showing the main window until Flutter has rasterized its first
+      // frame. Otherwise the OS may draw the window chrome while the Flutter
+      // surface is still empty/transparent, which intermittently shows an empty
+      // (see-through) window on some GPUs/drivers.
+      WidgetsBinding.instance.waitUntilFirstFrameRasterized.then((_) {
+        windowManager.show();
+        windowManager.focus();
+        // Move registration of active main window here to prevent from async visible check.
+        rustDeskWinManager.registerActiveWindow(kWindowMainId);
+      });
     }
     windowManager.setOpacity(1);
     windowManager.setTitle(getWindowName());
