@@ -421,7 +421,14 @@ class _DesktopHomePageState extends State<DesktopHomePage>
               decoration: const BoxDecoration(
                 border: Border(top: BorderSide(color: Color(0xFFE0EAF8))),
               ),
-              child: ConnectionPage(),
+              // ConnectionPage's numeric ID field (and its IDTextInputFormatter,
+              // which computes selection offsets from the right) is designed for
+              // LTR. Under the page's RTL Directionality the typed digits do not
+              // render correctly, so force LTR for the embedded connection UI.
+              child: Directionality(
+                textDirection: TextDirection.ltr,
+                child: ConnectionPage(),
+              ),
             ),
             crossFadeState: _connectOpen
                 ? CrossFadeState.showSecond
