@@ -2674,7 +2674,13 @@ impl LoginConfigHandler {
             .unwrap_or_default();
         }
         avatar = resolve_avatar_url(avatar);
-        let mut display_name = get_builtin_option(keys::OPTION_DISPLAY_NAME);
+        // ChalakDesk: user-editable display name set from the app settings.
+        // Takes priority over the builtin option, the signed-in account name
+        // and the OS username.
+        let mut display_name = LocalConfig::get_option("custom-display-name");
+        if display_name.is_empty() {
+            display_name = get_builtin_option(keys::OPTION_DISPLAY_NAME);
+        }
         if display_name.is_empty() {
             display_name =
                 serde_json::from_str::<serde_json::Value>(&LocalConfig::get_option("user_info"))
