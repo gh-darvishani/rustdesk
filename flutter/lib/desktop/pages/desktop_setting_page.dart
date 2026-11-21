@@ -408,6 +408,15 @@ class _GeneralState extends State<_General> {
       isWeb ? RxBool(false) : Get.find<RxBool>(tag: 'stop-service');
   RxBool serviceBtnEnabled = true.obs;
   final GlobalKey _minToolbarOptionKey = GlobalKey();
+  // ChalakDesk: user-editable display name (sent as my_name to the peer).
+  final TextEditingController _displayNameController = TextEditingController(
+      text: bind.mainGetLocalOption(key: 'custom-display-name'));
+
+  @override
+  void dispose() {
+    _displayNameController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -416,6 +425,7 @@ class _GeneralState extends State<_General> {
       controller: scrollController,
       children: [
         if (!isWeb) service(),
+        if (!isWeb) displayName(),
         theme(),
         _Card(title: 'Language', children: [language()]),
         if (!isWeb) hwcodec(),
@@ -425,6 +435,44 @@ class _GeneralState extends State<_General> {
         other()
       ],
     ).marginOnly(bottom: _kListViewBottomMargin);
+  }
+
+  // ChalakDesk: editable display name, persisted to the local option
+  // "custom-display-name", which the Rust core sends as my_name to the peer.
+  Widget displayName() {
+    void save() {
+      final name = _displayNameController.text.trim();
+      bind.mainSetLocalOption(key: 'custom-display-name', value: name);
+      FocusScope.of(context).unfocus();
+      showToast('نام نمایشی ذخیره شد');
+    }
+
+    return _Card(title: 'نام نمایشی', children: [
+      Directionality(
+        textDirection: TextDirection.rtl,
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _displayNameController,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => save(),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                  hintText: 'نام شما (برای نمایش به پشتیبان)',
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton(
+              onPressed: save,
+              child: const Text('ذخیره').marginSymmetric(horizontal: 8),
+            ),
+          ],
+        ),
+      ).marginOnly(left: _kContentHMargin, bottom: 6),
+    ]);
   }
 
   Widget theme() {

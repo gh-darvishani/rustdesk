@@ -59,10 +59,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   bool isCardClosed = false;
   // ChalakDesk: whether the "connect to peer" panel is expanded.
   bool _connectOpen = false;
-  // ChalakDesk: user-editable display name (sent as my_name to the peer).
-  late final TextEditingController _displayNameController =
-      TextEditingController(
-          text: bind.mainGetLocalOption(key: 'custom-display-name'));
   // ChalakDesk: whether the ID (phone number) is hidden on the access card.
   late bool _hideId = bind.mainGetLocalOption(key: 'hide-my-id') == 'Y';
 
@@ -313,8 +309,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          _buildDisplayNameField(context),
           const SizedBox(height: 18),
           _buildConnectExpandable(context),
         ],
@@ -365,62 +359,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             ),
           ),
           ...actions,
-        ],
-      ),
-    );
-  }
-
-  // ChalakDesk: editable display name. Persisted to the local option
-  // "custom-display-name", which the Rust core sends as my_name to the peer.
-  Widget _buildDisplayNameField(BuildContext context) {
-    void save() {
-      final name = _displayNameController.text.trim();
-      bind.mainSetLocalOption(key: 'custom-display-name', value: name);
-      FocusScope.of(context).unfocus();
-      showToast('نام نمایشی ذخیره شد');
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF4FD),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0EAF8)),
-      ),
-      child: Row(
-        children: [
-          const Text(
-            'نام نمایشی',
-            style: TextStyle(fontSize: 14, color: _kBrandMuted),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.badge_outlined, size: 20, color: _kBrandMuted),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: _displayNameController,
-              textAlign: TextAlign.center,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => save(),
-              decoration: const InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                hintText: 'نام شما (برای نمایش به پشتیبان)',
-                hintStyle: TextStyle(fontSize: 14, color: _kBrandMuted),
-              ),
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: _kBrandInk,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          _pillButton(
-            icon: Icons.save_rounded,
-            tooltip: 'ذخیره نام نمایشی',
-            onTap: save,
-          ),
         ],
       ),
     );
@@ -1139,7 +1077,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     _uniLinksSubscription?.cancel();
     Get.delete<RxBool>(tag: 'stop-service');
     _updateTimer?.cancel();
-    _displayNameController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
